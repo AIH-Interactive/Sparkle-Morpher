@@ -312,14 +312,13 @@ def main() -> int:
         plans.append((variant, jar_path, metadata))
     if args.upload:
         available = get_json(f"{API_BASE}/game/versions", {"X-Api-Token": token})
-        names = {item["name"]: item["id"] for item in available}
-        # Minecraft labels also occur in the server-pack taxonomy; use game type 1.
-        names.update({item["name"]: item["id"] for item in available if item["gameVersionTypeID"] == 1})
+        names = {item["name"] for item in available}
         for _, _, metadata in plans:
-            missing = set(metadata["gameVersionNames"]) - names.keys()
+            missing = set(metadata["gameVersionNames"]) - names
             if missing:
                 raise ValueError(f"CurseForge does not accept these version labels: {sorted(missing)}")
-            metadata["gameVersions"] = [names[name] for name in metadata.pop("gameVersionNames")]
+            # Duplicate names exist across dependency taxonomies. Let the project
+            # upload endpoint resolve names in its own allowed dependency scope.
     previous = receipts(BASE_DIR, "curseforge", args.version)
     for variant, jar_path, metadata in plans:
         print(f"Jar: {jar_path}")

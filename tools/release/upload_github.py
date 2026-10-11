@@ -162,8 +162,13 @@ def main() -> int:
 
     upload_args = [str(path) for path in [*jars, *assets]]
     if exists:
-        print(f"Release {tag} exists; uploading assets with --clobber.")
-        print(run_gh(["release", "upload", tag, *upload_args, "--clobber", "--repo", args.repo]))
+        entry = next(item for page in pages for item in page if item["tag_name"] == tag)
+        remote = {item["name"]: item for item in entry["assets"]}
+        upload_args = [str(path) for path in [*jars, *assets]
+                       if remote.get(path.name, {}).get("digest") != "sha256:" + digest(path)]
+        if upload_args:
+            print(f"Release {tag} exists; uploading {len(upload_args)} missing or changed assets.")
+            print(run_gh(["release", "upload", tag, *upload_args, "--clobber", "--repo", args.repo]))
         if args.notes_file is not None or args.notes:
             edit_command = ["release", "edit", tag]
             if args.notes_file is not None:
@@ -192,7 +197,9 @@ def main() -> int:
         else:
             command += ["--notes", body]
         print(run_gh(command))
-    published = json.loads(run_gh(["api", f"repos/{args.repo}/releases/tags/{tag}"]))
+    pages = json.loads(run_gh(["api", f"repos/{args.repo}/releases", "--paginate", "--slurp"]))
+    entry = next(item for page in pages for item in page if item["tag_name"] == tag)
+    published = json.loads(run_gh(["api", f"repos/{args.repo}/releases/{entry['id']}"]))
     for path in [*jars, *assets]:
         matches = [entry for entry in published["assets"] if entry["name"] == path.name]
         if len(matches) != 1 or matches[0]["size"] != path.stat().st_size:
@@ -201,8 +208,9 @@ def main() -> int:
         if remote_digest and remote_digest != "sha256:" + digest(path):
             raise RuntimeError(f"GitHub asset hash verification failed: {path.name}")
         save_receipt(BASE_DIR, "github", args.version, path.name, {
-            "url": matches[0]["browser_download_url"], "sha256": digest(path), "size": path.stat().st_size,
-            "release": published["html_url"], "digest_verified": bool(remote_digest),
+            "url": f"https://github.com/{args.repo}/releases/download/{tag}/{path.name}",
+            "sha256": digest(path), "size": path.stat().st_size,
+            "release": f"https://github.com/{args.repo}/releases/tag/{tag}", "digest_verified": bool(remote_digest),
         })
     if published["draft"]:
         print(run_gh(["release", "edit", tag, "--repo", args.repo, "--draft=false"]))
