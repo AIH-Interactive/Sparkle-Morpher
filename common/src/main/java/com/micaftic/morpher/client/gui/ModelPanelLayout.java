@@ -31,7 +31,7 @@ final class ModelPanelLayout {
             this.contentHeight = height - this.footerHeight - 14;
             this.footerTop = top + height - this.footerHeight;
         } else {
-            this.tabHeight = tight ? 22 : 28;
+            this.tabHeight = tight ? 18 : 28;
             this.railWidth = 0;
             this.contentLeft = left + 10;
             this.contentTop = top + this.tabHeight + 10;
@@ -50,7 +50,7 @@ final class ModelPanelLayout {
         int panelHeight = clamp(screenHeight - marginY, Math.min(300, maxHeight), Math.min(540, maxHeight));
         // 竖排只由逻辑宽高决定：guiScale 是物理/逻辑比值，与可用逻辑空间无关，
         // 用它当代理会让同一台显示器换个 GUI 缩放就突变布局。
-        boolean verticalTabs = screenHeight < 300 || screenWidth < 430;
+        boolean verticalTabs = screenHeight < 400 || screenWidth < 430;
         boolean tight = verticalTabs || screenHeight < 400 || screenWidth < 560;
         return new ModelPanelLayout((screenWidth - panelWidth) / 2, (screenHeight - panelHeight) / 2, panelWidth, panelHeight, tight, verticalTabs);
     }

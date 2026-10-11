@@ -107,7 +107,7 @@ final class ModelPanelState {
     }
 
     boolean canChangeCloudVisibility(boolean owned) {
-        return modelSource != ModelSource.LOCAL && (cloudView == CloudView.MINE || owned);
+        return modelSource != ModelSource.LOCAL && cloudView != CloudView.ALL && (cloudView == CloudView.MINE || owned);
     }
 
     void saveCloudTab() {

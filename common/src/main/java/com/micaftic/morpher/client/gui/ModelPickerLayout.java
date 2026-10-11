@@ -114,6 +114,14 @@ final class ModelPickerLayout {
      * 也不至于只摆两张巨大卡），张数相同时取卡更大者，避免把卡压得过小。</p>
      */
     static Cards cards(int listW, int listH) {
+        return cards(listW, listH, CARD_MIN_W, CARD_MAX_W);
+    }
+
+    static Cards cards(int listW, int listH, int entryCount, boolean compact) {
+        return cards(listW, listH, compact ? 48 : CARD_MIN_W, compact ? 96 : CARD_MAX_W);
+    }
+
+    private static Cards cards(int listW, int listH, int cardMinW, int cardMaxW) {
         int usableW = Math.max(1, listW - 2 * CARD_MARGIN);
         int usableH = Math.max(1, listH - 2 * CARD_MARGIN);
         int bestCols = 0;
@@ -123,10 +131,10 @@ final class ModelPickerLayout {
         int bestCapacity = 0;
         for (int cols = 1; cols <= MAX_COLS; cols++) {
             int wFit = (usableW - (cols - 1) * CARD_GAP) / cols;
-            if (wFit < CARD_MIN_W) {
+            if (wFit < cardMinW) {
                 break; // 再往后的列数只会更窄
             }
-            int cellW = Math.min(wFit, CARD_MAX_W);
+            int cellW = Math.min(wFit, cardMaxW);
             int cellH = cardH(cellW);
             int rows = (usableH + CARD_GAP) / (cellH + CARD_GAP);
             if (rows < 1) {
@@ -147,12 +155,17 @@ final class ModelPickerLayout {
         if (bestCols == 0) {
             // 放不下任何最小可读卡：给出单张「宽高都放得下」的卡，
             // 由调用方决定是否回退文字网格（此处不得超出可用区，否则排版会溢出）。
-            int byWidth = Math.min(usableW, CARD_MAX_W);
+            int byWidth = Math.min(usableW, cardMaxW);
             int byHeight = (int) Math.floor(usableH / CARD_ASPECT);
             int cellW = Math.max(1, Math.min(byWidth, byHeight));
             return new Cards(1, 1, cellW, Math.max(1, Math.min(cardH(cellW), usableH)), 1);
         }
         return new Cards(bestCols, bestRows, bestW, bestH, bestCapacity);
+    }
+
+    /** Keep every result set in the same left-to-right, top-to-bottom grid. */
+    static Cards cards(int listW, int listH, int entryCount) {
+        return cards(listW, listH);
     }
 
     /** 卡高（含名字条）。 */
@@ -200,14 +213,14 @@ final class ModelPickerLayout {
             return entryCount <= 0 ? 1 : (entryCount + capacity - 1) / capacity;
         }
 
-        /** 整块居中后，相对列表区左上角的 X 偏移（至少留出边距）。 */
+        /** 相对列表区左上角的 X 偏移。 */
         int originX(int listW) {
-            return Math.max(CARD_MARGIN, (listW - blockW()) / 2);
+            return CARD_MARGIN;
         }
 
-        /** 整块居中后，相对列表区左上角的 Y 偏移（至少留出边距）。 */
+        /** 相对列表区左上角的 Y 偏移。 */
         int originY(int listH) {
-            return Math.max(CARD_MARGIN, (listH - blockH()) / 2);
+            return CARD_MARGIN;
         }
     }
 }
