@@ -28,10 +28,12 @@ import java.util.Optional;
  */
 public final class CloudInstanceRegistry {
     private static final CloudInstanceProfile BUILTIN_OFFICIAL = new CloudInstanceProfile(
-            CloudInstanceConfig.v1("official", URI.create("https://micafic.xyz")),
+            CloudInstanceConfig.v1("official", URI.create("https://micaftic.top")),
             "Official Cloud");
     private static final CloudInstanceConfig LEGACY_OFFICIAL = CloudInstanceConfig.v1("official",
             URI.create("https://spm-cloud-official.robinson171.workers.dev"));
+    private static final CloudInstanceConfig PREVIOUS_OFFICIAL = CloudInstanceConfig.v1("official",
+            URI.create("https://micafic.xyz"));
 
     private final Path file;
     private List<CloudInstanceProfile> profiles = List.of();
@@ -55,7 +57,7 @@ public final class CloudInstanceRegistry {
             if (entries != null && entries.isJsonArray()) {
                 for (JsonElement entry : entries.getAsJsonArray()) {
                     CloudInstanceProfile profile = parseProfile(entry.getAsJsonObject());
-                    if (LEGACY_OFFICIAL.equals(profile.instance())) {
+                    if (LEGACY_OFFICIAL.equals(profile.instance()) || PREVIOUS_OFFICIAL.equals(profile.instance())) {
                         profile = new CloudInstanceProfile(BUILTIN_OFFICIAL.instance(), profile.name());
                         migrated = true;
                     }
