@@ -4,6 +4,9 @@ import com.micaftic.morpher.core.legacy.YesModelUtils;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Map;
 
 /**
@@ -19,6 +22,14 @@ public final class LegacyCompatModelFormat {
 
     public static int detectCryptoVersion(byte[] data) {
         return YesModelUtils.getYsmCryptoVersion(data);
+    }
+
+    /** Reads only the eight-byte YSM header; upload validation must not materialize an entire model. */
+    public static int detectCryptoVersion(Path file) throws IOException {
+        try (InputStream input = Files.newInputStream(file)) {
+            byte[] header = input.readNBytes(8);
+            return YesModelUtils.getYsmCryptoVersion(header);
+        }
     }
 
     public static Map<String, byte[]> read(byte[] data) throws IOException {

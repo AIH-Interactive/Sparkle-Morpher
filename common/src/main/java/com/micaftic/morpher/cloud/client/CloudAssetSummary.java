@@ -8,8 +8,13 @@ public record CloudAssetSummary(
         String name,
         String format,
         long byteLength,
-        String visibility
+        String visibility,
+        String ownerAccountId,
+        boolean owned
 ) {
+    public CloudAssetSummary(CloudAssetRef ref, String name, String format, long byteLength, String visibility) {
+        this(ref, name, format, byteLength, visibility, "", false);
+    }
     public CloudAssetSummary(CloudAssetRef ref, String name, String format, long byteLength) {
         this(ref, name, format, byteLength, "PRIVATE");
     }
@@ -18,6 +23,7 @@ public record CloudAssetSummary(
         Objects.requireNonNull(ref, "ref");
         name = Objects.requireNonNull(name, "name");
         format = Objects.requireNonNull(format, "format");
+        ownerAccountId = ownerAccountId == null ? "" : ownerAccountId;
         visibility = visibility == null || visibility.isBlank() ? "PRIVATE" : visibility.trim().toUpperCase(java.util.Locale.ROOT);
         if (!visibility.equals("PRIVATE") && !visibility.equals("PUBLIC")) {
             throw new IllegalArgumentException("Cloud asset visibility must be PRIVATE or PUBLIC");

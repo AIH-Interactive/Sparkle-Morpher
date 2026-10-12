@@ -822,6 +822,15 @@ public static Optional<Path> getLocalModelSourcePath(String modelId) {
     }
 
     public static void reloadLocalModels(@Nullable Consumer<Component> callback) {
+        reloadLocalModels(callback, true);
+    }
+
+    /** Refreshes upload sources without parsing every local model. */
+    public static void reloadLocalModelsForUpload(@Nullable Consumer<Component> callback) {
+        reloadLocalModels(callback, false);
+    }
+
+    private static void reloadLocalModels(@Nullable Consumer<Component> callback, boolean loadAllModels) {
         long scanRevision = LOCAL_MODEL_SCAN_REVISION.begin();
         submitModelTask(() -> {
             Component error = null;
@@ -843,7 +852,7 @@ public static Optional<Path> getLocalModelSourcePath(String modelId) {
                 LocalModelCatalog.Diff candidateDiff = LocalModelCatalog.diff(lazyModelSources, catalog);
                 Set<String> staleIds = new HashSet<>(candidateDiff.staleIds());
                 List<String> failedModelIds = new ArrayList<>();
-                if (!isLazyModelLoading()) {
+                if (loadAllModels && !isLazyModelLoading()) {
                     for (Map.Entry<String, LocalModelCatalog.Entry> entry : catalog.entrySet()) {
                         if (!LOCAL_MODEL_SCAN_REVISION.isCurrent(scanRevision)) break;
                         if (!isScanSourceCurrent(scanRevision, entry.getValue())) continue;

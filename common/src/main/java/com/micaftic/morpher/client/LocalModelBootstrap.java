@@ -4,6 +4,8 @@ import com.micaftic.morpher.YesSteveModel;
 import com.micaftic.morpher.core.storage.LocalDisplayPreferencesStore;
 import com.micaftic.morpher.core.storage.LocalModelDefaultsStore;
 import com.micaftic.morpher.core.storage.ModelStoragePaths;
+import com.micaftic.morpher.core.api.PlatformAPI;
+import com.micaftic.morpher.core.config.ConfigPolicies;
 import com.micaftic.morpher.model.LocalModelService;
 
 /** One-time client preference migration before the legacy config is retired. */
@@ -19,6 +21,8 @@ public final class LocalModelBootstrap {
             LocalModelService.initializeDefaults(LocalModelDefaultsStore.FALLBACK);
             LocalDisplayPreferences.initialize(LocalDisplayPreferencesStore.DEFAULT);
         }
-        LocalModelService.reloadPacks();
+        boolean loadModelDefinitions = PlatformAPI.isServer()
+                || !ConfigPolicies.memory().lazyModelLoading();
+        LocalModelService.reloadPacks(loadModelDefinitions);
     }
 }

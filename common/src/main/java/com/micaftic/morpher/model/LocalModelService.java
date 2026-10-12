@@ -102,10 +102,15 @@ public final class LocalModelService {
                     Runnable::run);
 
     public static void reloadPacks() {
+        reloadPacks(true);
+    }
+
+    /** Loads metadata eagerly only when requested; lazy clients still prepare folders and packs. */
+    public static void reloadPacks(boolean loadModelDefinitions) {
         initialized = false;
         MODEL_RELOAD_COORDINATOR.submit(() -> {
             reloadPacksSync();
-            return loadModelsSnapshot();
+            return loadModelsSnapshot(loadModelDefinitions);
         }, LocalModelService::publishModelLoadResult,
                 error -> YesSteveModel.LOGGER.error("[SM] Failed to reload model packs", error));
     }
@@ -294,19 +299,25 @@ public final class LocalModelService {
     }
 
     private static ModelLoadResult loadModelsSnapshot() {
+        return loadModelsSnapshot(true);
+    }
+
+    private static ModelLoadResult loadModelsSnapshot(boolean loadModelDefinitions) {
         Map<String, LocalModelDefinition> loadedModels = new LinkedHashMap<>();
         Set<String> authIds = new HashSet<>();
         Set<String> validCacheFiles = new HashSet<>();
         Map<String, LocalPackMetadata> loadedPacks = new LinkedHashMap<>();
 
-        prepareBbmodelImportCache();
+        if (loadModelDefinitions) prepareBbmodelImportCache();
         scanDirectoryPacks(BUILT, loadedPacks);
         scanDirectoryPacks(CUSTOM, loadedPacks);
         scanDirectoryPacks(AUTH, loadedPacks);
 
-        scanDirectoryModels(BUILT, CACHE_SERVER, loadedModels, authIds, validCacheFiles, false);
-        scanDirectoryModels(CUSTOM, CACHE_SERVER, loadedModels, authIds, validCacheFiles, false);
-        scanDirectoryModels(AUTH, CACHE_SERVER, loadedModels, authIds, validCacheFiles, true);
+        if (loadModelDefinitions) {
+            scanDirectoryModels(BUILT, CACHE_SERVER, loadedModels, authIds, validCacheFiles, false);
+            scanDirectoryModels(CUSTOM, CACHE_SERVER, loadedModels, authIds, validCacheFiles, false);
+            scanDirectoryModels(AUTH, CACHE_SERVER, loadedModels, authIds, validCacheFiles, true);
+        }
         // Legacy cache identities remain available for offline migration and rollback.
         return new ModelLoadResult(true, null, loadedModels, authIds.toArray(new String[0]), loadedPacks);
     }

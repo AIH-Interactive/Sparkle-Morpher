@@ -62,6 +62,11 @@ public final class ModelStoragePaths {
         return folder().resolve("custom");
     }
 
+    /** Imported Cloud revisions have their own root and never enter the user's custom-model library. */
+    public static Path cloudModels() {
+        return folder().resolve("cloud_models");
+    }
+
     public static Path auth() {
         return folder().resolve("auth");
     }

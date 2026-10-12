@@ -119,7 +119,7 @@ public final class ModelUploadSession {
             return Component.translatable("gui.sparkle_morpher.import.error.invalid_extension");
         }
         try {
-            if (kind == ImportKind.YSM && LegacyCompatModelFormat.detectCryptoVersion(Files.readAllBytes(source)) == -1) {
+            if (kind == ImportKind.YSM && LegacyCompatModelFormat.detectCryptoVersion(source) == -1) {
                 return Component.translatable("gui.sparkle_morpher.import.error.invalid_ysm");
             }
         } catch (IOException error) {

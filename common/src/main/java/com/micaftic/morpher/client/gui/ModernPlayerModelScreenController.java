@@ -532,6 +532,17 @@ public final class ModernPlayerModelScreenController {
         }
     }
 
+    /** Opens the separate on-disk directory that stores imported Cloud model copies. */
+    public void openCloudModelFolder() {
+        try {
+            Files.createDirectories(ModelStoragePaths.cloudModels());
+            Util.getPlatform().openFile(ModelStoragePaths.cloudModels().toFile());
+            this.host.postStatus(Component.literal(ModelStoragePaths.cloudModels().toString()), ChatFormatting.GRAY);
+        } catch (IOException e) {
+            this.host.postStatus(Component.translatable("gui.sparkle_morpher.import.error.open_folder", e.getMessage()), ChatFormatting.RED);
+        }
+    }
+
     public boolean isAllowUpload() {
         return ClientModelManager.isAllowUpload();
     }

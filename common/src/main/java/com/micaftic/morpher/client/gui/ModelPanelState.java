@@ -20,6 +20,7 @@ final class ModelPanelState {
         ALL,
         AUTH,
         STAR,
+        NOT_STAR,
         SERVER_AVAILABLE,
         LOCAL_ONLY;
 
@@ -83,15 +84,16 @@ final class ModelPanelState {
     boolean cloudLoading;
     boolean cloudHasMore;
     int cloudScroll;
+    com.micaftic.morpher.cloud.client.CloudCatalogCursorHistory cloudPages = new com.micaftic.morpher.cloud.client.CloudCatalogCursorHistory();
+    int cloudBatchSize;
 
     record CloudTabState(CloudView view, String search, String cursor, String loadedKey,
                          List<CloudAssetSummary> entries, boolean loaded, boolean hasMore,
-                         int scroll, ModelPickerLayout.Style style) { }
+                         int scroll, ModelPickerLayout.Style style,
+                         com.micaftic.morpher.cloud.client.CloudCatalogCursorHistory pages, int batchSize) { }
 
     List<CloudView> cloudViews() {
-        return modelSource == ModelSource.COMMUNITY_CLOUD
-                ? List.of(CloudView.ALL, CloudView.RECENT, CloudView.FAVORITES, CloudView.MINE, CloudView.PUBLIC)
-                : List.of(CloudView.RECENT, CloudView.FAVORITES, CloudView.MINE, CloudView.PUBLIC);
+        return List.of(CloudView.ALL, CloudView.RECENT, CloudView.FAVORITES, CloudView.MINE, CloudView.PUBLIC);
     }
 
     String cloudCatalogScope() {
@@ -107,13 +109,13 @@ final class ModelPanelState {
     }
 
     boolean canChangeCloudVisibility(boolean owned) {
-        return modelSource != ModelSource.LOCAL && cloudView != CloudView.ALL && (cloudView == CloudView.MINE || owned);
+        return modelSource != ModelSource.LOCAL && (cloudView == CloudView.MINE || owned);
     }
 
     void saveCloudTab() {
         if (selectedCloudInstanceId.isBlank()) return;
         cloudTabs.put(selectedCloudInstanceId, new CloudTabState(cloudView, cloudSearchText,
-                cloudCursor, cloudLoadedKey, List.copyOf(cloudEntries), cloudLoaded, cloudHasMore, cloudScroll, pickerStyle));
+                cloudCursor, cloudLoadedKey, List.copyOf(cloudEntries), cloudLoaded, cloudHasMore, cloudScroll, pickerStyle, cloudPages, cloudBatchSize));
     }
 
     void restoreCloudTab(String instanceId) {
@@ -129,6 +131,8 @@ final class ModelPanelState {
         cloudLoaded = saved != null && saved.loaded();
         cloudHasMore = saved != null && saved.hasMore();
         cloudLoading = false;
+        cloudPages = saved == null ? new com.micaftic.morpher.cloud.client.CloudCatalogCursorHistory() : saved.pages();
+        cloudBatchSize = saved == null ? 0 : saved.batchSize();
         cloudScroll = saved == null || saved.style() != pickerStyle ? 0 : Math.max(0, saved.scroll());
     }
     String resourceSearchText = "";

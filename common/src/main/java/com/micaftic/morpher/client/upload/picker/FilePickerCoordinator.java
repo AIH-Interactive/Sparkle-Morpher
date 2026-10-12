@@ -371,6 +371,40 @@ public final class FilePickerCoordinator {
         return new PickedFile(baseName + ".zip", out.toByteArray());
     }
 
+    /** Packs directly to disk so batch upload queues never retain model ZIP bytes in heap. */
+    public static long packDirectoryTo(Path dir, Path destination, int maxPackedBytes) throws IOException {
+        if (dir == null || !Files.isDirectory(dir)) throw new IOException("Not a directory: " + dir);
+        Path root = dir.toAbsolutePath().normalize();
+        AtomicInteger count = new AtomicInteger();
+        long perfStart = PerformanceProfiler.start();
+        try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(destination));
+             Stream<Path> stream = Files.walk(root, MAX_FOLDER_DEPTH)) {
+            for (var iterator = stream.filter(Files::isRegularFile).iterator(); iterator.hasNext();) {
+                Path path = iterator.next();
+                Path normalized = path.toAbsolutePath().normalize();
+                if (!normalized.startsWith(root)) throw new IOException("Invalid path outside import folder: " + path);
+                if (count.incrementAndGet() > MAX_FOLDER_FILE_COUNT) throw new IOException("Too many files in model folder");
+                String entryName = root.relativize(normalized).toString().replace('\\', '/');
+                if (entryName.isBlank() || entryName.startsWith("/") || entryName.contains("../"))
+                    throw new IOException("Invalid zip entry path: " + entryName);
+                zip.putNextEntry(new ZipEntry(entryName));
+                Files.copy(normalized, zip);
+                zip.closeEntry();
+            }
+        } catch (IOException | RuntimeException error) {
+            Files.deleteIfExists(destination);
+            throw error;
+        }
+        long size = Files.size(destination);
+        if (maxPackedBytes > 0 && size > maxPackedBytes) {
+            Files.deleteIfExists(destination);
+            throw new PackedSizeLimitExceededException(maxPackedBytes);
+        }
+        PerformanceProfiler.logElapsed("pack_directory", root.getFileName() == null ? "model" : root.getFileName().toString(),
+                perfStart, "files=" + count.get() + " bytes=" + size);
+        return size;
+    }
+
     private static void checkPackedSize(ByteArrayOutputStream out, int maxPackedBytes) throws PackedSizeLimitExceededException {
         if (maxPackedBytes > 0 && out.size() > maxPackedBytes) {
             throw new PackedSizeLimitExceededException(maxPackedBytes);
@@ -455,8 +489,6 @@ public final class FilePickerCoordinator {
         return out.toByteArray();
     }
 
-    private FilePickerCoordinator() {
-    }
     public record PickedFile(String fileName, byte[] data) {
     }
 
@@ -464,13 +496,15 @@ public final class FilePickerCoordinator {
         private final int maxBytes;
 
         public PackedSizeLimitExceededException(int maxBytes) {
-            super("Packed model exceeds server limit: " + maxBytes + " bytes");
+            super("Packed folder exceeds upload limit");
             this.maxBytes = maxBytes;
         }
 
         public int maxBytes() {
-            return maxBytes;
+            return this.maxBytes;
         }
     }
 
+    private FilePickerCoordinator() {
+    }
 }

@@ -18,6 +18,8 @@ import com.micaftic.morpher.core.api.network.upload.ModelUploadTransport;
 public final class CloudAssetClient {
 
     private final CloudHttpClient http;
+    private final CloudCatalogPageCache pages = new CloudCatalogPageCache();
+    public void clearPageCache() { pages.clear(); }
 
     public CloudAssetClient(CloudHttpClient http) {
         this.http = java.util.Objects.requireNonNull(http, "http");
@@ -34,11 +36,13 @@ public final class CloudAssetClient {
                 .append("&limit=").append(boundedLimit);
         if (query != null && !query.isBlank()) path.append("&q=").append(encode(query.trim()));
         if (cursor != null && !cursor.isBlank()) path.append("&after=").append(encode(cursor));
-        return http.getJson(path.toString()).thenApply(this::parsePage);
+        String key = path.toString();
+        return pages.get(key, () -> http.getJson(key).thenApply(this::parsePage));
     }
 
     /** Changes owner-controlled visibility without sending model bytes or creating a revision. */
     public CompletableFuture<CloudAssetSummary> setVisibility(String assetId, String visibility) {
+        clearPageCache();
         if (!"PUBLIC".equals(visibility) && !"PRIVATE".equals(visibility))
             throw new IllegalArgumentException("Visibility must be PUBLIC or PRIVATE");
         new CloudAssetRef(assetId, 1, "0".repeat(64));
@@ -108,6 +112,7 @@ public final class CloudAssetClient {
     }
 
     private CompletableFuture<CloudAssetSummary> parseUploadResponse(HttpResponse<byte[]> response) {
+        clearPageCache();
         if (response.statusCode() < 200 || response.statusCode() >= 300) {
             return CompletableFuture.failedFuture(CloudHttpClient.httpFailure(response));
         }
@@ -138,7 +143,10 @@ public final class CloudAssetClient {
 
     private List<CloudAssetSummary> parseEntries(JsonElement root) {
         List<CloudAssetSummary> entries = new ArrayList<>();
+        int rowIndex = 0;
+        int skipped = 0;
         for (JsonElement element : root.getAsJsonArray()) {
+            try {
                 if (!element.isJsonObject()) {
                     throw new IllegalArgumentException("Cloud asset catalog entry must be an object");
                 }
@@ -152,7 +160,19 @@ public final class CloudAssetClient {
                         object.get("name").getAsString(),
                         object.get("format").getAsString(),
                         object.get("byte_length").getAsLong(),
-                        object.has("visibility") ? object.get("visibility").getAsString() : "PRIVATE"));
+                        object.has("visibility") ? object.get("visibility").getAsString() : "PRIVATE",
+                        object.has("owner_account_id") && !object.get("owner_account_id").isJsonNull() ? object.get("owner_account_id").getAsString() : "",
+                        object.has("owned") && object.get("owned").getAsBoolean()));
+            } catch (RuntimeException malformedEntry) {
+                skipped++;
+                com.micaftic.morpher.YesSteveModel.LOGGER.warn(
+                        "[Cloud] Skipping malformed asset catalog row {}", rowIndex, malformedEntry);
+            }
+            rowIndex++;
+        }
+        if (skipped > 0) {
+            com.micaftic.morpher.YesSteveModel.LOGGER.warn(
+                    "[Cloud] Skipped {} malformed asset catalog row(s)", skipped);
         }
         return List.copyOf(entries);
     }
@@ -160,7 +180,9 @@ public final class CloudAssetClient {
     private CloudAssetSummary parseSummary(com.google.gson.JsonObject object) {
         CloudAssetRef ref = new CloudAssetRef(object.get("asset_id").getAsString(), object.get("revision").getAsLong(), object.get("raw_sha256").getAsString());
         return new CloudAssetSummary(ref, object.get("name").getAsString(), object.get("format").getAsString(), object.get("byte_length").getAsLong(),
-                object.has("visibility") ? object.get("visibility").getAsString() : "PRIVATE");
+                object.has("visibility") ? object.get("visibility").getAsString() : "PRIVATE",
+                object.has("owner_account_id") && !object.get("owner_account_id").isJsonNull() ? object.get("owner_account_id").getAsString() : "",
+                object.has("owned") && object.get("owned").getAsBoolean());
     }
 
     private static String encode(String value) {

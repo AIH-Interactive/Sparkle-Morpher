@@ -33,7 +33,7 @@ class ModelPanelStateTest {
         assertEquals("public", state.cloudCatalogScope());
         assertTrue(state.cloudSearchRequired());
         state.modelSource = ModelPanelState.ModelSource.SPM_CLOUD;
-        assertFalse(state.cloudViews().contains(ModelPanelState.CloudView.ALL));
+        assertTrue(state.cloudViews().contains(ModelPanelState.CloudView.ALL));
         assertTrue(state.cloudSearchRequired());
         state.cloudSearchText = " fox ";
         assertFalse(state.cloudSearchRequired());
