@@ -45,9 +45,11 @@ public final class PrivacyMode {
 
     public static void onConfigChanged(boolean enabled) {
         PrivacyState.setConfigured(enabled);
+        com.micaftic.morpher.client.peer.ClientNetworkPreferences.refresh();
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer player = minecraft.player;
         if (enabled) {
+            com.micaftic.morpher.client.peer.ClientPeerRuntime.disconnect();
             PrivacyState.setSessionActive(true);
             if (player != null) {
                 ClientModelManager.reloadLocalModelsAfterPrivacyMode();

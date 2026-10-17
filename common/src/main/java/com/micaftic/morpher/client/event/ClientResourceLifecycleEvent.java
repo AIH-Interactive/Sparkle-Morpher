@@ -30,6 +30,7 @@ public final class ClientResourceLifecycleEvent {
     }
 
     private static void cleanup(String reason) {
+        com.micaftic.morpher.client.peer.ClientPeerRuntime.disconnect();
         ClientModelManager.releaseServerSyncedModels(reason);
         GpuRenderPath.disposeAllMeshes(reason);
         AudioStreamCache.clearAll(reason);

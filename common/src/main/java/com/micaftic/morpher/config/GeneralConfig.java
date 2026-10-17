@@ -70,7 +70,14 @@ public class GeneralConfig {
 
     public static ForgeConfigSpec.BooleanValue LAZY_MODEL_LOADING;
 
+    public static ForgeConfigSpec.EnumValue<com.micaftic.morpher.cloud.client.CloudClientPerformance.Preset> CLOUD_PERFORMANCE_PRESET;
+    public static ForgeConfigSpec.IntValue CLOUD_UPLOAD_CONCURRENCY;
+    public static ForgeConfigSpec.IntValue CLOUD_PROCESSING_CONCURRENCY;
+
     public static ForgeConfigSpec.BooleanValue PRIVACY_MODE;
+    public static ForgeConfigSpec.EnumValue<com.micaftic.morpher.core.network.NetworkPreset> NETWORK_PRESET;
+    public static ForgeConfigSpec.ConfigValue<String> PEER_LISTENERS;
+    public static ForgeConfigSpec.ConfigValue<String> PEER_ENTRANCES;
 
     public static ForgeConfigSpec.IntValue MAX_RESIDENT_CPU_MODELS;
 
@@ -212,6 +219,12 @@ public class GeneralConfig {
         LAZY_MODEL_LOADING = builder.define("LazyModelLoading", true);
         builder.comment("Use local models only and block all Sparkle Morpher client-to-server traffic.");
         PRIVACY_MODE = builder.define("PrivacyMode", false);
+        CLOUD_PERFORMANCE_PRESET = builder.comment("Client-side SPM Cloud performance preset. UNLIMITED adds no client concurrency cap; server limits still apply.").defineEnum("CloudPerformancePreset", com.micaftic.morpher.cloud.client.CloudClientPerformance.Preset.UNLIMITED);
+        CLOUD_UPLOAD_CONCURRENCY = builder.comment("Concurrent Cloud uploads in CUSTOM mode. 0 means unlimited.").defineInRange("CloudUploadConcurrency", 0, 0, 64);
+        CLOUD_PROCESSING_CONCURRENCY = builder.comment("Concurrent Cloud model imports in CUSTOM mode. 0 means unlimited.").defineInRange("CloudProcessingConcurrency", 0, 0, 64);
+        NETWORK_PRESET = builder.comment("Network permissions and ready model source priority. AUTO preserves automatic LAN and existing Cloud. Credentials are retained.").defineEnum("NetworkPreset", com.micaftic.morpher.core.network.NetworkPreset.AUTO);
+        PEER_LISTENERS = builder.comment("Explicit model TCP listeners, at most two local wildcard/loopback host:port entries separated by commas. IPv6 uses brackets.").define("PeerModelListeners", "0.0.0.0:26437");
+        PEER_ENTRANCES = builder.comment("Explicit advertised model TCP endpoints, separated by commas. Sakura model mapping is independent of the Minecraft game mapping. No invitation secrets are saved.").define("PeerModelEntrances", "");
         builder.comment("Maximum models whose CPU geometry and animation data stay resident. Idle models reload from their source when used again.");
         MAX_RESIDENT_CPU_MODELS = builder.defineInRange("MaxResidentCpuModels", 64, 1, 512);
         builder.comment("Minimum idle time before GPU/native render caches can be trimmed.");

@@ -19,6 +19,7 @@ public final class YesSteveModelFabricClient implements ClientModInitializer {
         OrihimeDirectModelCompat.init();
         FabricClientResourceLifecycle.register();
         CloudWorldLifecycleEvents.register();
+        PeerLanClientNetworking.register();
         HudOverlay debugOverlay = AnimationDebugOverlay.createOverlay();
         HudOverlay loadingOverlay = new ExtraPlayerOverlay();
         HudRenderCallback.EVENT.register((guiGraphics, tickDelta) -> {
