@@ -1,7 +1,14 @@
 package com.micaftic.morpher.client.gui;
 
+import com.micaftic.morpher.cloud.client.CloudAssetPage;
+import com.micaftic.morpher.cloud.client.CloudAssetSummary;
+import com.micaftic.morpher.cloud.client.CloudAssetImportName;
+import com.micaftic.morpher.core.model.CloudAssetIdentity;
+import com.micaftic.morpher.core.model.lifecycle.ScreenGenerationGate;
+import com.micaftic.morpher.core.model.lifecycle.ScreenRequestToken;
+import com.micaftic.morpher.cloud.client.CloudClientRuntime;
+import com.micaftic.morpher.cloud.client.CloudModelSelectionStore;
 import com.micaftic.morpher.capability.PlayerCapability;
-
 import com.micaftic.morpher.client.ClientModelManager;
 import com.micaftic.morpher.client.PrivacyMode;
 import com.micaftic.morpher.client.gui.resource.ModelRepoClient;
@@ -14,22 +21,15 @@ import com.micaftic.morpher.client.upload.IResourceLocatable;
 import com.micaftic.morpher.client.upload.picker.FilePickerCoordinator;
 import com.micaftic.morpher.client.upload.ModelUploadSession;
 import com.micaftic.morpher.client.upload.UploadManager;
-import com.micaftic.morpher.cloud.client.CloudAssetPage;
-import com.micaftic.morpher.cloud.client.CloudAssetSummary;
-import com.micaftic.morpher.cloud.client.CloudAssetImportName;
-import com.micaftic.morpher.cloud.client.CloudClientRuntime;
-import com.micaftic.morpher.cloud.client.CloudModelSelectionStore;
-import com.micaftic.morpher.core.model.CloudAssetIdentity;
-import com.micaftic.morpher.core.model.lifecycle.ScreenGenerationGate;
-import com.micaftic.morpher.core.model.lifecycle.ScreenRequestToken;
 import com.micaftic.morpher.config.GeneralConfig;
+
 import com.micaftic.morpher.core.vector.VectorApiCapability;
 import com.micaftic.morpher.core.storage.ModelStoragePaths;
 import com.micaftic.morpher.util.LocalStarModelsStore;
 import com.micaftic.morpher.util.SmExecutors;
+
 import com.micaftic.morpher.util.ModelIdUtil;
 import net.minecraft.ChatFormatting;
-import net.minecraft.Util;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.texture.AbstractTexture;
@@ -110,7 +110,6 @@ public final class ModernPlayerModelScreenController {
     private final List<ModelRepoEntry> resourceEntries = new ArrayList<>();
     private final Set<String> selectedResourceUrls = new LinkedHashSet<>();
     private final Queue<FilePickerCoordinator.PickedFile> pendingImports = new ArrayDeque<>();
-    private boolean localImportInProgress;
     private final ScreenGenerationGate screenGeneration = new ScreenGenerationGate();
 
     public ModernPlayerModelScreenController(ModelPanelState state, Host host) {
@@ -188,7 +187,7 @@ public final class ModernPlayerModelScreenController {
 
     /** 切换大陆模式并落盘。 */
     public void toggleMainlandChinaMode() {
-        this.resourceConfig = new ResourceStationConfig.State(this.resourceConfig.urls(), this.resourceConfig.selectedUrl(), this.resourceConfig.timeoutMs(), this.resourceConfig.maxDownloadBytes(), !this.resourceConfig.preferGithubAccelerator(), this.resourceConfig.githubAccelerators());
+        this.resourceConfig = new ResourceStationConfig.State(this.resourceConfig.urls(),this.resourceConfig.selectedUrl(),this.resourceConfig.timeoutMs(),this.resourceConfig.maxDownloadBytes(),!this.resourceConfig.preferGithubAccelerator(),this.resourceConfig.githubAccelerators());
         ResourceStationConfig.save(this.resourceConfig);
     }
 
@@ -202,6 +201,7 @@ public final class ModernPlayerModelScreenController {
      * <p>异步 + 超时 + 代际/请求号双重失效检查，行为与拆分前逐行等价。</p>
      */
     public void refreshResources(boolean manual) {
+        if (manual && resourcePreviewQueue != null) resourcePreviewQueue.retry();
         int requestId = ++this.state.resourceRequestId;
         long generation = this.screenGeneration.capture();
         ResourceStationConfig.State config = this.resourceConfig;
@@ -380,6 +380,8 @@ public final class ModernPlayerModelScreenController {
     /** 标记当前代际失效（原 {@code removed()} 中的 {@code screenGeneration++}）。 */
     public void invalidateGeneration() {
         this.screenGeneration.invalidate();
+        closeCloudPreviews();
+        closeResourcePreviews();
     }
 
     public int generation() {
@@ -438,11 +440,10 @@ public final class ModernPlayerModelScreenController {
             return;
         }
         if (!this.screenGeneration.beginImport()) return;
-        this.localImportInProgress = true;
         long generation = this.screenGeneration.capture();
+        if (generation < 0L) return;
         this.host.postStatus(Component.translatable("gui.sparkle_morpher.import.state.local_importing", modelId), ChatFormatting.YELLOW);
         ClientModelManager.importLocalModel(modelId, fileName, file.data(), error -> {
-            this.localImportInProgress = false;
             this.screenGeneration.completeImport(generation, () -> {
                 if (error != null) {
                     this.host.postStatus(error, ChatFormatting.RED);
@@ -525,7 +526,7 @@ public final class ModernPlayerModelScreenController {
     public void openModelFolder() {
         try {
             Files.createDirectories(ModelStoragePaths.custom());
-            Util.getPlatform().openFile(ModelStoragePaths.custom().toFile());
+            net.minecraft.Util.getPlatform().openFile(ModelStoragePaths.custom().toFile());
             this.host.postStatus(Component.literal(ModelStoragePaths.custom().toString()), ChatFormatting.GRAY);
         } catch (IOException e) {
             this.host.postStatus(Component.translatable("gui.sparkle_morpher.import.error.open_folder", e.getMessage()), ChatFormatting.RED);
@@ -536,7 +537,7 @@ public final class ModernPlayerModelScreenController {
     public void openCloudModelFolder() {
         try {
             Files.createDirectories(ModelStoragePaths.cloudModels());
-            Util.getPlatform().openFile(ModelStoragePaths.cloudModels().toFile());
+            net.minecraft.Util.getPlatform().openFile(ModelStoragePaths.cloudModels().toFile());
             this.host.postStatus(Component.literal(ModelStoragePaths.cloudModels().toString()), ChatFormatting.GRAY);
         } catch (IOException e) {
             this.host.postStatus(Component.translatable("gui.sparkle_morpher.import.error.open_folder", e.getMessage()), ChatFormatting.RED);
@@ -599,17 +600,10 @@ public final class ModernPlayerModelScreenController {
     }
 
     public boolean isLocalOnlyModel(String modelId) {
-        return ClientModelManager.isLocalOnlyModel(modelId);
+        return !CloudAssetIdentity.isRuntimeModelId(modelId) && ClientModelManager.isLocalOnlyModel(modelId);
     }
-
-    public boolean cloudAvailable() {
-        return CloudClientRuntime.state(state.selectedCloudInstanceId) != null;
-    }
-
-    public String cloudInstanceId() {
-        return state.selectedCloudInstanceId;
-    }
-
+public boolean cloudAvailable() { return CloudClientRuntime.state(state.selectedCloudInstanceId) != null; }
+    public String cloudInstanceId() { return state.selectedCloudInstanceId; }
     public CompletableFuture<CloudAssetPage> listCloudAssets(String scope, String query, String cursor, int limit) {
         if (!cloudAvailable()) return CompletableFuture.failedFuture(new IllegalStateException("Cloud is not connected"));
         String instanceId = cloudInstanceId();
@@ -636,45 +630,114 @@ public final class ModernPlayerModelScreenController {
         try { return cloudAvailable() ? CloudModelSelectionStore.recent(cloudInstanceId()) : List.of(); }
         catch (RuntimeException error) { reportCloudStoreFailure(error); return List.of(); }
     }
-
     public List<CloudAssetSummary> favoriteCloudAssets() {
         try { return cloudAvailable() ? CloudModelSelectionStore.favorites(cloudInstanceId()) : List.of(); }
         catch (RuntimeException error) { reportCloudStoreFailure(error); return List.of(); }
     }
-
     public boolean isCloudFavorite(CloudAssetSummary summary) {
         try { return cloudAvailable() && CloudModelSelectionStore.isFavorite(cloudInstanceId(), summary.ref().assetId()); }
         catch (RuntimeException error) { reportCloudStoreFailure(error); return false; }
     }
-
     public boolean toggleCloudFavorite(CloudAssetSummary summary) {
         if (!cloudAvailable()) return false;
         return CloudModelSelectionStore.toggleFavorite(cloudInstanceId(), summary);
     }
-
     public void markCloudApplied(CloudAssetSummary summary) {
         try { if (cloudAvailable()) CloudModelSelectionStore.recordApplied(cloudInstanceId(), summary); }
         catch (RuntimeException error) { reportCloudStoreFailure(error); }
     }
-
     public String cloudModelId(CloudAssetSummary summary) {
-        var runtime = CloudClientRuntime.state(cloudInstanceId());
+        CloudClientRuntime.RuntimeState runtime = CloudClientRuntime.state(state.selectedCloudInstanceId);
         if (runtime == null) throw new IllegalStateException("Cloud runtime is not configured");
-        return new CloudAssetIdentity(runtime.instance().instanceId(), "catalog", summary.ref().assetId(),
-                Long.toString(summary.ref().revision()), summary.ref().rawSha256()).runtimeModelId();
+        return cloudIdentity(runtime, summary).runtimeModelId();
+    }
+    private final java.util.LinkedHashMap<String,OuterFileTexture> resourcePreviews=new java.util.LinkedHashMap<>();
+    private com.micaftic.morpher.cloud.client.CloudPreviewQueue<ModelRepoEntry> resourcePreviewQueue;
+    private int resourcePreviewEpoch;
+    public OuterFileTexture resourcePreview(ModelRepoEntry entry){return resourcePreviews.get(entry.url());}
+    public void requestResourcePreviews(java.util.Collection<ModelRepoEntry> entries){
+        if(resourcePreviewQueue==null){int epoch=resourcePreviewEpoch;
+            resourcePreviewQueue=new com.micaftic.morpher.cloud.client.CloudPreviewQueue<>(2,entry->{
+                if(resourcePreviews.containsKey(entry.url())||entry.previewUrl()==null||entry.previewUrl().isBlank())return CompletableFuture.completedFuture(null);
+                return CompletableFuture.supplyAsync(()->{try{return ModelRepoClient.downloadPreview(entry,resourceConfig);}catch(Exception e){throw new java.util.concurrent.CompletionException(e);}},RESOURCE_EXECUTOR).thenCompose(bytes->{
+                    CompletableFuture<Void> result=new CompletableFuture<>();Minecraft.getInstance().execute(()->{try{
+                        if(epoch==resourcePreviewEpoch){while(resourcePreviews.size()>=48){var it=resourcePreviews.values().iterator();it.next().close();it.remove();}resourcePreviews.put(entry.url(),new OuterFileTexture(bytes));}result.complete(null);
+                    }catch(Throwable e){result.completeExceptionally(e);}});return result;
+                });
+            });
+        }
+        resourcePreviewQueue.update(entries);
+    }
+    private void closeResourcePreviews(){resourcePreviewEpoch++;if(resourcePreviewQueue!=null)resourcePreviewQueue.close();resourcePreviewQueue=null;resourcePreviews.values().forEach(OuterFileTexture::close);resourcePreviews.clear();}
+    public java.util.List<com.micaftic.morpher.client.gui.resource.download.DownloadQueue.TaskSnapshot> downloadTasks(){var snapshot=DownloadQueue.snapshot();var result=new ArrayList<com.micaftic.morpher.client.gui.resource.download.DownloadQueue.TaskSnapshot>(snapshot.unfinishedTasks());result.addAll(snapshot.finishedTasks());return result;}
+    public void retryDownload(com.micaftic.morpher.client.gui.resource.download.DownloadQueue.TaskSnapshot task){DownloadQueue.retry(task);}
+
+    private com.micaftic.morpher.cloud.client.CloudPreviewQueue<CloudAssetSummary> previewQueue;
+    private CloudClientRuntime.RuntimeState previewRuntime;
+    private final java.util.Map<String,String> previewFailures=new java.util.concurrent.ConcurrentHashMap<>();
+    public Component cloudPreviewError(CloudAssetSummary entry){
+        if(!cloudAvailable())return null;
+        String failure=previewFailures.get(cloudModelId(entry));
+        return failure==null?null:Component.translatable("gui.sparkle_morpher.cloud.asset_download_failed",failure);
+    }
+
+    public void requestCloudPreviews(java.util.Collection<CloudAssetSummary> visible) {
+        var runtime = CloudClientRuntime.state(cloudInstanceId());
+        if (previewQueue == null || previewRuntime != runtime) {
+            closeCloudPreviews();
+            previewRuntime = runtime;
+            previewQueue = new com.micaftic.morpher.cloud.client.CloudPreviewQueue<>(2, this::loadCloudPreview);
+        }
+        if (runtime != null) previewQueue.update(visible);
+    }
+
+    public void retryCloudPreviews() { previewFailures.clear(); if (previewQueue != null) previewQueue.retry(); }
+    private void closeCloudPreviews() {
+        if (previewQueue != null) previewQueue.close();
+        previewQueue = null; previewRuntime = null; previewFailures.clear();
+    }
+    private CompletableFuture<?> loadCloudPreview(CloudAssetSummary summary) {
+        var expected = previewRuntime;
+        long generation = screenGeneration.capture();
+        String instanceId = cloudInstanceId();
+        java.util.function.BooleanSupplier current = () -> screenGeneration.isCurrent(generation)
+                && CloudClientRuntime.state(instanceId) == expected && previewRuntime == expected;
+        if (expected == null || !current.getAsBoolean()) return CompletableFuture.completedFuture(null);
+        String modelId = cloudModelId(summary);
+        if (assemblyOrNull(modelId) != null) return CompletableFuture.completedFuture(null);
+        expected.assetCatalog().upsert(summary);
+        CompletableFuture<Void> result = new CompletableFuture<>();
+        expected.assetMaterialization().ensure(summary.ref()).thenApplyAsync(path -> {
+            if (!current.getAsBoolean()) throw new java.util.concurrent.CancellationException();
+            try {
+                if (!com.micaftic.morpher.core.model.lifecycle.ModelDecodeAdmission.previewFits(Files.size(path)))
+                    throw new IOException("Not enough free heap for this model preview; select the model to load it directly");
+                return Files.readAllBytes(path);
+            }
+            catch (IOException error) { throw new java.util.concurrent.CompletionException(error); }
+        }).whenComplete((bytes, failure) -> Minecraft.getInstance().execute(() -> {
+            if (!current.getAsBoolean()) { result.cancel(false); return; }
+            if (failure != null) { result.completeExceptionally(failure); return; }
+            ClientModelManager.loadCloudPreview(modelId, CloudAssetImportName.fileName(summary), bytes,
+                    expected.cacheRoot(), current, error -> {
+                if (error != null && !error.getString().isBlank()) result.completeExceptionally(new IllegalStateException(error.getString()));
+                else result.complete(null);
+            });
+        }));
+        return result.whenComplete((ignored,error)->{
+            if(current.getAsBoolean()){
+                if(error==null)previewFailures.remove(modelId);else previewFailures.put(modelId,rootMessage(error));
+            }
+        });
     }
 
     public void importCloudAsset(CloudAssetSummary summary, Consumer<Component> callback) {
-        if (!cloudAvailable()) {
-            callback.accept(Component.translatable("gui.sparkle_morpher.cloud.disconnected"));
-            return;
-        }
         long generation = this.screenGeneration.capture();
         String instanceId = cloudInstanceId();
-        var expectedRuntime = CloudClientRuntime.state(instanceId);
+        CloudClientRuntime.RuntimeState expectedRuntime = CloudClientRuntime.state(instanceId);
+        if (expectedRuntime == null) { callback.accept(Component.translatable("gui.sparkle_morpher.cloud.disconnected")); return; }
+        String modelId = cloudIdentity(expectedRuntime, summary).runtimeModelId();
         expectedRuntime.assetCatalog().upsert(summary);
-        String modelId = cloudModelId(summary);
-        String fileName = CloudAssetImportName.fileName(summary);
         boolean previouslyApplied = false;
         try { previouslyApplied = CloudModelSelectionStore.recent(instanceId).stream().anyMatch(entry -> entry.ref().equals(summary.ref())); }
         catch (RuntimeException error) { reportCloudStoreFailure(error); }
@@ -682,27 +745,22 @@ public final class ModernPlayerModelScreenController {
         ? expectedRuntime.assetMaterialization().ensurePreviouslyApplied(summary.ref())
         : expectedRuntime.assetMaterialization().ensure(summary.ref());
         materialized.thenApplyAsync(path -> {
-            try {
-                return Files.readAllBytes(path);
-            } catch (IOException e) {
-                throw new java.util.concurrent.CompletionException(e);
-            }
-        })
-        .whenComplete((bytes, failure) -> Minecraft.getInstance().execute(() -> {
+            try { return Files.readAllBytes(path); } catch (IOException e) { throw new java.util.concurrent.CompletionException(e); }
+        }).whenComplete((bytes, failure) -> Minecraft.getInstance().execute(() -> {
             if (!this.screenGeneration.isCurrent(generation)) return;
             if (CloudClientRuntime.state(instanceId) != expectedRuntime) { callback.accept(Component.translatable("gui.sparkle_morpher.cloud.disconnected")); return; }
-            if (failure != null) {
-                callback.accept(Component.translatable("gui.sparkle_morpher.cloud.asset_download_failed", rootMessage(failure)));
-                return;
-            }
-            ClientModelManager.importLocalModel(modelId, fileName, bytes, error -> {
+            if (failure != null) { callback.accept(Component.translatable("gui.sparkle_morpher.cloud.asset_download_failed", rootMessage(failure))); return; }
+            ClientModelManager.importCloudModel(modelId, CloudAssetImportName.fileName(summary), bytes, error -> {
                 if (!this.screenGeneration.isCurrent(generation)) return;
                 if (CloudClientRuntime.state(instanceId) != expectedRuntime) { callback.accept(Component.translatable("gui.sparkle_morpher.cloud.disconnected")); return; }
                 callback.accept(error);
             });
         }));
     }
-
+    private static CloudAssetIdentity cloudIdentity(CloudClientRuntime.RuntimeState runtime, CloudAssetSummary summary) {
+        return new CloudAssetIdentity(runtime.instance().instanceId(), "catalog", summary.ref().assetId(),
+                Long.toString(summary.ref().revision()), summary.ref().rawSha256());
+    }
     public void markModelUsed(String modelId) {
         ClientModelManager.markModelUsed(modelId);
     }
@@ -813,7 +871,12 @@ public final class ModernPlayerModelScreenController {
         };
         GeneralConfig.NATIVE_SIMD_POLICY.set(next);
         GeneralConfig.NATIVE_SIMD_POLICY.save();
+
     }
+
+
+
+
 
 
 
