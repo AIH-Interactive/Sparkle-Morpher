@@ -118,3 +118,6 @@ common/logs/
 dist/
 # Python 缓存
 __pycache__/
+
+# 独立站点仓库（内嵌 Git，勿纳入模组仓库）
+site/micaftic-labs/
