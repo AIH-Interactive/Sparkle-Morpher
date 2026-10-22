@@ -129,6 +129,16 @@ public final class ConfigPolicies {
     public record FeaturePolicy(boolean experimentalFallbackElytraWithoutLocator, boolean experimentalEnableElytraForDefaultAndMiscModels, boolean vulkanExperimentalCapabilityProbe, boolean worldRendererHook, boolean animationRouletteDebugLog) {
     }
 
+    /** [FP-COMPAT] first-person arm diagnostics; default false keeps release builds silent. */
+    public static boolean firstPersonRenderDiagnostics() {
+        return bool(GeneralConfig.FIRST_PERSON_RENDER_DIAGNOSTICS, false);
+    }
+
+    /** [FP-COMPAT] substitute SPM's arm inside Punchy!'s render pass; default false until visually verified. */
+    public static boolean punchyArmBridge() {
+        return bool(GeneralConfig.FIRST_PERSON_PUNCHY_ARM_BRIDGE, false);
+    }
+
     public record Snapshot(RenderPolicy render, MemoryPolicy memory, DiagnosticsPolicy diagnostics,
                            PrivacyPolicy privacy) {
     }

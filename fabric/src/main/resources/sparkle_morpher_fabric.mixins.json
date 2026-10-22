@@ -2,6 +2,7 @@
   "required": true,
   "minVersion": "0.8",
   "package": "com.micaftic.morpher.fabric.mixin",
+  "plugin": "com.micaftic.morpher.fabric.mixin.plugin.SparkleFabricMixinPlugin",
   "compatibilityLevel": "JAVA_21",
   "injectors": {
     "defaultRequire": 1
@@ -9,6 +10,7 @@
   "client": [
     "client.PlayerRendererHandMixin",
     "client.PlayerRendererMixin",
-    "client.YSMSoundInstanceFabricMixin"
+    "client.YSMSoundInstanceFabricMixin",
+    "client.compat.punchy.PunchyArmRendererMixin"
   ]
 }
